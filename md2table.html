@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Text → Markdown Table</title>
+  <style>
+    body          {font-family: system-ui, sans-serif; margin:2rem; max-width: 800px;}
+    textarea      {width:100%; min-height:150px; margin:.5rem 0; font-family: monospace;}
+    .row          {margin: .5rem 0;}
+    .out          {background:#f9f9f9;}
+    button        {padding:.4rem 1rem; margin-right:.7rem;}
+    label         {margin-right:1rem;}
+  </style>
+</head>
+<body>
+  <h1>Text → Markdown Table</h1>
+
+  <div class="row">
+    <label><input type="radio" name="sep" value="auto" checked> Auto-detect</label>
+    <label><input type="radio" name="sep" value="tab"> Tabs</label>
+    <label><input type="radio" name="sep" value="comma"> Commas</label>
+  </div>
+
+  <textarea id="in" placeholder="Paste your tab- OR comma-separated text here"></textarea>
+
+  <div class="row">
+    <button id="convert">Convert ➜</button>
+    <button id="copy">Copy to clipboard</button>
+  </div>
+
+  <textarea id="out" class="out" placeholder="Markdown table appears here" readonly></textarea>
+
+<script>
+(function () {
+
+  // helper -------------------------------------------------------------------
+  function detectDelimiter(text) {
+    const commaCount = (text.match(/,/g)   || []).length;
+    const tabCount   = (text.match(/\t/g)  || []).length;
+    return tabCount > commaCount ? '\t' : ',';
+  }
+
+  // core ---------------------------------------------------------------------
+  function toMarkdownTable(text, explicitDelim) {
+    if (!text.trim()) return '';
+
+    const delim = explicitDelim === 'auto'
+                  ? detectDelimiter(text)
+                  : (explicitDelim === 'tab' ? '\t' : ',');
+
+    // Split rows
+    const rows = text.trim().split(/\r?\n/);
+
+    // Split cols & trim each cell
+    const matrix = rows.map(r => r.split(delim).map(c => c.trim()));
+
+    // Fill uneven rows with empty strings to keep table rectangular
+    const maxCols = Math.max(...matrix.map(r => r.length));
+    matrix.forEach(r => { while (r.length < maxCols) r.push(''); });
+
+    // Build header (first row) + separator
+    const header  = '| ' + matrix[0].join(' | ') + ' |';
+    const divider = '| ' + matrix[0].map(()=> '--').join(' | ') + ' |';
+
+    // Build rest of table
+    const body = matrix.slice(1)
+                       .map(r => '| ' + r.join(' | ') + ' |')
+                       .join('\n');
+
+    return [header, divider, body].filter(Boolean).join('\n');
+  }
+
+  // DOM wiring ---------------------------------------------------------------
+  const $in      = document.getElementById('in');
+  const $out     = document.getElementById('out');
+  const $convert = document.getElementById('convert');
+  const $copy    = document.getElementById('copy');
+
+  $convert.addEventListener('click', () => {
+    const sepChoice = document.querySelector('input[name="sep"]:checked').value;
+    $out.value = toMarkdownTable($in.value, sepChoice);
+  });
+
+  $copy.addEventListener('click', async () => {
+    if (!$out.value) return;
+    try {
+      await navigator.clipboard.writeText($out.value);
+      $copy.textContent = 'Copied ✔';
+      setTimeout(()=> $copy.textContent = 'Copy to clipboard', 1500);
+    } catch(e) {
+      alert('Unable to copy: ' + e);
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
