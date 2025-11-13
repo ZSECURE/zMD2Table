@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Text → Markdown → Word Table</title>
+
+<!-- Minimal styling -->
+<style>
+  body   {font-family:system-ui,sans-serif; margin:2rem; max-width:850px;}
+  textarea{width:100%; min-height:150px; margin:.5rem 0; font-family:monospace;}
+  .row   {margin:.5rem 0; display:flex; flex-wrap:wrap; gap:.7rem; align-items:center;}
+  .out   {background:#f9f9f9;}
+  button {padding:.4rem 1rem;}
+  select {padding:.35rem .8rem;}
+  label  {margin-right:1rem;}
+</style>
+
+<!-- 3rd-party libs (must load before our own JS) -->
+<script defer src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/1.3.8/FileSaver.js"></script>
+</head>
+
+<body>
+<h1>Text → Markdown Table and Word!)</h1>
+
+<!-- delimiter controls -->
+<div class="row">
+  <label><input type="radio" name="sep" value="auto" checked> Auto-detect</label>
+  <label><input type="radio" name="sep" value="tab"> Tabs</label>
+  <label><input type="radio" name="sep" value="comma"> Commas</label>
+</div>
+
+<textarea id="in" placeholder="Paste your tab- or comma-separated text here"></textarea>
+
+<!-- action buttons -->
+<div class="row">
+  <button id="convert">Convert ➜</button>
+  <button id="copy">Copy Markdown</button>
+  <button id="toWord">Word (.docx)</button>
+
+  <select id="templateSelect">
+    <option value="">‒‒ insert template ‒‒</option>
+    <option value="qcf">Question / Consultant Feedback</option>
+    <option value="req">Requirement table</option>
+  </select>
+</div>
+
+<textarea id="out" class="out" placeholder="Markdown table appears here" readonly></textarea>
+
+<!-- main app script -->
+<script>
+(() => {
+/* -------------------------------------------------------------------------- */
+/*  Helpers                                                                   */
+/* -------------------------------------------------------------------------- */
+function detectDelimiter(text){
+  const comma=(text.match(/,/g)||[]).length;
+  const tab  =(text.match(/\t/g)||[]).length;
+  return tab > comma ? '\t' : ',';
+}
+
+function toMarkdownTable(text, explicitDelim){
+  if(!text.trim()) return '';
+
+  const delim = explicitDelim === 'auto'
+        ? detectDelimiter(text)
+        : (explicitDelim === 'tab' ? '\t' : ',');
+
+  const rows   = text.trim().split(/\r?\n/);
+  const matrix = rows.map(r => r.split(delim).map(c => c.trim()));
+  const max    = Math.max(...matrix.map(r => r.length));
+  matrix.forEach(r => { while(r.length < max) r.push(''); });
+
+  const header  = '| ' + matrix[0].join(' | ') + ' |';
+  const divider = '| ' + matrix[0].map(() => '--').join(' | ') + ' |';
+  const body    = matrix.slice(1)
+                        .map(r => '| ' + r.join(' | ') + ' |')
+                        .join('\n');
+
+  return [header, divider, body].filter(Boolean).join('\n');
+}
+
+/* Markdown → 2-D array ----------------------------------------------------- */
+function mdToMatrix(md){
+  const lines = md.trim().split(/\r?\n/).filter(l => l.trim().startsWith('|'));
+  if(lines.length === 0) return [];
+
+  return lines
+    .filter((_, i) => i !== 1)            // drop alignment line
+    .map(l => l.replace(/^\s*\|/,'')
+               .replace(/\|\s*$/,'')
+               .split('|')
+               .map(c => c.trim()));
+}
+
+/* -------------------------------------------------------------------------- */
+/*  DOM nodes                                                                 */
+/* -------------------------------------------------------------------------- */
+const $in       = document.getElementById('in');
+const $out      = document.getElementById('out');
+const $convert  = document.getElementById('convert');
+const $copy     = document.getElementById('copy');
+const $toWord   = document.getElementById('toWord');
+const $template = document.getElementById('templateSelect');
+
+/* -------------------------------------------------------------------------- */
+/*  Event handlers                                                            */
+/* -------------------------------------------------------------------------- */
+$convert.addEventListener('click', () => {
+  const sepChoice = document.querySelector('input[name="sep"]:checked').value;
+  $out.value = toMarkdownTable($in.value, sepChoice);
+});
+
+$copy.addEventListener('click', async () => {
+  if(!$out.value) return;
+  try {
+    await navigator.clipboard.writeText($out.value);
+    $copy.textContent = 'Copied ✔';
+    setTimeout(() => $copy.textContent = 'Copy Markdown', 1500);
+  } catch (e) {
+    alert('Unable to copy: ' + e);
+  }
+});
+
+/* ----------- Markdown → Word (.docx) ------------------------------------- */
+$toWord.addEventListener('click', () => {
+  if(!$out.value.trim()) return alert('The output box is empty.');
+
+  const matrix = mdToMatrix($out.value);
+  if(matrix.length === 0) return alert('No valid Markdown table found.');
+
+  const {
+    Document, Packer, Paragraph,
+    Table, TableRow, TableCell, WidthType
+  } = window.docx;                 // ← guaranteed to exist now
+
+  const rows = matrix.map(row =>
+    new TableRow({
+      children: row.map(cell =>
+        new TableCell({
+          width: {size: 100 / row.length, type: WidthType.PERCENTAGE},
+          children: [ new Paragraph(cell) ]
+        })
+      )
+    })
+  );
+
+  const table = new Table({
+    rows,
+    width: {size: 100, type: WidthType.PERCENTAGE}
+  });
+
+  const doc = new Document({
+    sections: [{children: [table]}]
+  });
+
+  Packer.toBlob(doc).then(blob => saveAs(blob, 'markdown-table.docx'));
+});
+
+/* ------------------------- templates ------------------------------------- */
+const templates = {
+  qcf: `| Question | Consultant Feedback |
+| -- | -- |
+| Problems |  |
+| Customer issues |  |
+| Reasons for overrun |  |
+| Scope accuracy |  |
+| Competencies right |  |`,
+
+  req: `| Requirement | Importance | Correctly Configured | Risk Rating |
+| -- | -- | -- | -- |
+| 4.7 (L1) Ensure that DKIM is enabled for all Exchange Online Domains (Automated) | Mandatory | No | High |`
+};
+
+$template.addEventListener('change', () => {
+  const key = $template.value;
+  if(key) $out.value = templates[key];
+});
+})();
+</script>
+</body>
+</html>
