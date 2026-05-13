@@ -298,7 +298,7 @@
     }
 
     function formatLine(record) {
-      return `${record.ip.padEnd(16, ' ')}(${record.name})`;
+      return `${record.ip}				(${record.name})`;
     }
 
     async function runLookups() {
