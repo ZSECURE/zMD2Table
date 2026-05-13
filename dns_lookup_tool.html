@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DNS Lookup Formatter</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --text: #16181d;
+      --muted: #5f6673;
+      --border: #d8dce5;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #b91c1c;
+      --code-bg: #101827;
+      --code-text: #e5e7eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --text: #f8fafc;
+        --muted: #a0a7b4;
+        --border: #2a3344;
+        --code-bg: #020617;
+        --code-text: #e5e7eb;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 18px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 10px 24px rgb(0 0 0 / 0.08);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 2.7rem);
+      letter-spacing: -0.04em;
+    }
+
+    p {
+      color: var(--muted);
+      margin-top: 0;
+    }
+
+    label {
+      display: block;
+      font-weight: 650;
+      margin: 18px 0 8px;
+    }
+
+    textarea, input[type="file"], select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-top: 18px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+    }
+
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .secondary:hover { background: rgb(127 127 127 / 0.12); }
+
+    .status {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .error { color: var(--danger); }
+
+    pre {
+      margin: 16px 0 0;
+      padding: 18px;
+      overflow: auto;
+      border-radius: 14px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      min-height: 180px;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    @media (min-width: 800px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .hint {
+      font-size: 0.92rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>DNS Lookup Formatter</h1>
+      <p>
+        Paste IPs/domains or upload a text file. The tool resolves domains to IPs and reverse-resolves IPs to hostnames,
+        then formats each result like: <code>8.8.8.8        (dns.google)</code>
+      </p>
+
+      <div class="grid">
+        <div>
+          <label for="inputFile">Upload file</label>
+          <input id="inputFile" type="file" accept=".txt,.csv,.log,.list,*/*" />
+          <div class="hint">One IP/domain per line is best. Commas, spaces, and tabs are also supported.</div>
+        </div>
+
+        <div>
+          <label for="resolver">DNS-over-HTTPS resolver</label>
+          <select id="resolver">
+            <option value="google">Google DNS</option>
+            <option value="cloudflare">Cloudflare DNS</option>
+          </select>
+          <div class="hint">Browser JavaScript cannot query DNS directly, so this uses public DNS-over-HTTPS APIs.</div>
+        </div>
+      </div>
+
+      <label for="inputText">Input IPs or domains</label>
+      <textarea id="inputText" spellcheck="false" placeholder="8.8.8.8&#10;8.8.4.4&#10;google.com"></textarea>
+
+      <div class="controls">
+        <button id="lookupButton">Run DNS lookups</button>
+        <button id="copyButton" class="secondary" disabled>Copy output</button>
+        <button id="downloadButton" class="secondary" disabled>Download .txt</button>
+        <button id="clearButton" class="secondary">Clear</button>
+      </div>
+
+      <div id="status" class="status">Ready.</div>
+
+      <label for="output">Output</label>
+      <pre id="output" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <script>
+    const inputFile = document.getElementById('inputFile');
+    const inputText = document.getElementById('inputText');
+    const resolver = document.getElementById('resolver');
+    const lookupButton = document.getElementById('lookupButton');
+    const copyButton = document.getElementById('copyButton');
+    const downloadButton = document.getElementById('downloadButton');
+    const clearButton = document.getElementById('clearButton');
+    const statusEl = document.getElementById('status');
+    const outputEl = document.getElementById('output');
+
+    const ipv4Regex = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+    const domainRegex = /^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+\.?$/;
+
+    inputFile.addEventListener('change', async () => {
+      const file = inputFile.files?.[0];
+      if (!file) return;
+      inputText.value = await file.text();
+      setStatus(`Loaded ${file.name}.`);
+    });
+
+    lookupButton.addEventListener('click', runLookups);
+    copyButton.addEventListener('click', copyOutput);
+    downloadButton.addEventListener('click', downloadOutput);
+    clearButton.addEventListener('click', clearAll);
+
+    function parseInput(text) {
+      return [...new Set(
+        text
+          .split(/[\s,;]+/)
+          .map(item => item.trim())
+          .map(item => item.replace(/^https?:\/\//i, '').replace(/\/.*$/, ''))
+          .filter(Boolean)
+      )];
+    }
+
+    function isIPv4(value) {
+      return ipv4Regex.test(value);
+    }
+
+    function isDomain(value) {
+      return domainRegex.test(value);
+    }
+
+    function ipToReverseName(ip) {
+      return ip.split('.').reverse().join('.') + '.in-addr.arpa';
+    }
+
+    function getDnsUrl(name, type) {
+      if (resolver.value === 'cloudflare') {
+        return `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`;
+      }
+
+      return `https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`;
+    }
+
+    async function dohQuery(name, type) {
+      const url = getDnsUrl(name, type);
+      const headers = resolver.value === 'cloudflare' ? { accept: 'application/dns-json' } : {};
+      const response = await fetch(url, { headers });
+
+      if (!response.ok) {
+        throw new Error(`DNS query failed with HTTP ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    async function lookupDomain(domain) {
+      const data = await dohQuery(domain, 'A');
+      const answers = Array.isArray(data.Answer) ? data.Answer : [];
+      const ips = answers
+        .filter(answer => answer.type === 1 && isIPv4(answer.data))
+        .map(answer => answer.data);
+
+      return [...new Set(ips)].map(ip => ({ ip, name: stripTrailingDot(domain) }));
+    }
+
+    async function reverseLookupIp(ip) {
+      const reverseName = ipToReverseName(ip);
+      const data = await dohQuery(reverseName, 'PTR');
+      const answers = Array.isArray(data.Answer) ? data.Answer : [];
+      const names = answers
+        .filter(answer => answer.type === 12 && answer.data)
+        .map(answer => stripTrailingDot(answer.data));
+
+      if (names.length === 0) {
+        return [{ ip, name: 'no PTR record found' }];
+      }
+
+      return [...new Set(names)].map(name => ({ ip, name }));
+    }
+
+    function stripTrailingDot(value) {
+      return String(value).replace(/\.$/, '');
+    }
+
+    function formatLine(record) {
+      return `${record.ip.padEnd(16, ' ')}(${record.name})`;
+    }
+
+    async function runLookups() {
+      const items = parseInput(inputText.value);
+      outputEl.textContent = '';
+      copyButton.disabled = true;
+      downloadButton.disabled = true;
+
+      if (items.length === 0) {
+        setStatus('Add at least one IP address or domain.', true);
+        return;
+      }
+
+      lookupButton.disabled = true;
+      setStatus(`Running lookups for ${items.length} item(s)...`);
+
+      const lines = [];
+      let processed = 0;
+
+      for (const item of items) {
+        processed += 1;
+        setStatus(`Looking up ${processed}/${items.length}: ${item}`);
+
+        try {
+          let records;
+
+          if (isIPv4(item)) {
+            records = await reverseLookupIp(item);
+          } else if (isDomain(item)) {
+            records = await lookupDomain(item);
+            if (records.length === 0) {
+              records = [{ ip: 'no A record', name: stripTrailingDot(item) }];
+            }
+          } else {
+            records = [{ ip: 'invalid input', name: item }];
+          }
+
+          for (const record of records) {
+            lines.push(formatLine(record));
+          }
+        } catch (error) {
+          lines.push(`${item.padEnd(16, ' ')}(lookup failed: ${error.message})`);
+        }
+
+        outputEl.textContent = lines.join('\n');
+      }
+
+      lookupButton.disabled = false;
+      copyButton.disabled = lines.length === 0;
+      downloadButton.disabled = lines.length === 0;
+      setStatus(`Done. ${lines.length} output line(s) generated.`);
+    }
+
+    async function copyOutput() {
+      const text = outputEl.textContent;
+      if (!text) return;
+
+      await navigator.clipboard.writeText(text);
+      setStatus('Output copied to clipboard.');
+    }
+
+    function downloadOutput() {
+      const text = outputEl.textContent;
+      if (!text) return;
+
+      const blob = new Blob([text + '\n'], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'dns-lookup-output.txt';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setStatus('Output downloaded.');
+    }
+
+    function clearAll() {
+      inputFile.value = '';
+      inputText.value = '';
+      outputEl.textContent = '';
+      copyButton.disabled = true;
+      downloadButton.disabled = true;
+      setStatus('Ready.');
+    }
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.className = isError ? 'status error' : 'status';
+    }
+  </script>
+</body>
+</html>
