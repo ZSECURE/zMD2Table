@@ -1,124 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Text → Markdown Table</title>
-<style>
-  body   {font-family:system-ui,sans-serif; margin:2rem; max-width:850px;}
-  textarea{width:100%; min-height:150px; margin:.5rem 0; font-family:monospace;}
-  .row   {margin:.5rem 0; display:flex; flex-wrap:wrap; gap:.7rem; align-items:center;}
-  .out   {background:#f9f9f9;}
-  button {padding:.4rem 1rem;}
-  select {padding:.35rem .8rem;}
-  label  {margin-right:1rem;}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Toolbox</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --panel: #fff;
+      --text: #16181d;
+      --muted: #555e6d;
+      --border: #d8dce5;
+      --accent: #1d4ed8;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --text: #f8fafc;
+        --muted: #b4bdcb;
+        --border: #344158;
+        --accent: #93c5fd;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+    }
+    main { max-width: 1000px; margin: 0 auto; padding: 48px 20px; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -.04em; }
+    h2 { margin: 0; font-size: 1.15rem; }
+    p { color: var(--muted); }
+    .intro { margin: 0 0 32px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+    .card {
+      display: flex;
+      flex-direction: column;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .card p { margin: 10px 0 20px; flex-grow: 1; }
+    .card a { color: var(--accent); font-weight: 700; }
+    a:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+    .placeholder { border-style: dashed; }
+    .placeholder span { color: var(--muted); font-size: .9rem; }
+    .note { margin-top: 24px; font-size: .9rem; }
+    code { overflow-wrap: anywhere; }
+  </style>
 </head>
 <body>
+  <main>
+    <header>
+      <h1>Toolbox</h1>
+      <p class="intro">Choose a tool to get started.</p>
+    </header>
 
-<h1>Text → Markdown Table</h1>
+    <section aria-label="Available tools" class="grid">
+      <article class="card">
+        <h2>Markdown Table</h2>
+        <p>Convert comma- or tab-separated text into a Markdown table.</p>
+        <a href="markdown_table.html">Open Markdown Table</a>
+      </article>
+      <article class="card">
+        <h2>Markdown to Word</h2>
+        <p>Convert text to a Markdown table and export it as a Word document.</p>
+        <a href="index2.html">Open Markdown to Word</a>
+      </article>
+      <article class="card">
+        <h2>DNS Lookup Formatter</h2>
+        <p>Look up domains and IP addresses and format the results.</p>
+        <a href="dns_lookup_tool.html">Open DNS Lookup Formatter</a>
+      </article>
+      <article class="card">
+        <h2>Email Security Check</h2>
+        <p>Check a domain's email security DNS records.</p>
+        <a href="email_security_check.html">Open Email Security Check</a>
+      </article>
 
-<div class="row">
-  <label><input type="radio" name="sep" value="auto" checked> Auto-detect</label>
-  <label><input type="radio" name="sep" value="tab"> Tabs</label>
-  <label><input type="radio" name="sep" value="comma"> Commas</label>
-</div>
-
-<textarea id="in" placeholder="Paste your tab- or comma-separated text here"></textarea>
-
-<div class="row">
-  <button id="convert">Convert ➜</button>
-  <button id="copy">Copy to clipboard</button>
-
-  <!-- NEW: template picker -->
-  <select id="templateSelect">
-    <option value="">‒‒ insert template ‒‒</option>
-    <option value="qcf">Question / Consultant Feedback</option>
-    <option value="req">Requirement table</option>
-  </select>
-</div>
-
-<textarea id="out" class="out" placeholder="Markdown table appears here" readonly></textarea>
-
-<script>
-(() => {
-/* -------------------------------------------------------------------------- */
-/*  Helpers                                                                   */
-/* -------------------------------------------------------------------------- */
-function detectDelimiter(text){
-  const comma=(text.match(/,/g)||[]).length,
-        tab  =(text.match(/\t/g)||[]).length;
-  return tab>comma ? '\t' : ',';
-}
-
-function toMarkdownTable(text, explicitDelim){
-  if(!text.trim()) return '';
-
-  const delim = explicitDelim==='auto'
-        ? detectDelimiter(text)
-        : (explicitDelim==='tab' ? '\t' : ',');
-
-  const rows   = text.trim().split(/\r?\n/);
-  const matrix = rows.map(r=>r.split(delim).map(c=>c.trim()));
-  const max    = Math.max(...matrix.map(r=>r.length));
-  matrix.forEach(r=>{while(r.length<max) r.push('');});
-
-  const header  = '| '+matrix[0].join(' | ')+' |';
-  const divider = '| '+matrix[0].map(()=> '--').join(' | ')+' |';
-  const body    = matrix.slice(1).map(r=>'| '+r.join(' | ')+' |').join('\n');
-
-  return [header,divider,body].filter(Boolean).join('\n');
-}
-
-/* -------------------------------------------------------------------------- */
-/*  DOM nodes                                                                 */
-/* -------------------------------------------------------------------------- */
-const $in       = document.getElementById('in');
-const $out      = document.getElementById('out');
-const $convert  = document.getElementById('convert');
-const $copy     = document.getElementById('copy');
-const $template = document.getElementById('templateSelect');
-
-/* -------------------------------------------------------------------------- */
-/*  Buttons                                                                   */
-/* -------------------------------------------------------------------------- */
-$convert.addEventListener('click', () => {
-  const sepChoice = document.querySelector('input[name="sep"]:checked').value;
-  $out.value = toMarkdownTable($in.value, sepChoice);
-});
-
-$copy.addEventListener('click', async () => {
-  if(!$out.value) return;
-  try{
-    await navigator.clipboard.writeText($out.value);
-    $copy.textContent='Copied ✔';
-    setTimeout(()=> $copy.textContent='Copy to clipboard',1500);
-  }catch(e){ alert('Unable to copy: '+e); }
-});
-
-/* -------------------------------------------------------------------------- */
-/*  Template picker                                                           */
-/* -------------------------------------------------------------------------- */
-const templates = {
-  qcf: `| Question | Consultant Feedback |
-| -- | -- |
-| Problems |  |
-| Customer issues |  |
-| Reasons for overrun |  |
-| Scope accuracy |  |
-| Competencies right |  |`,
-
-  req: `| Requirement | Importance | Correctly Configured | Risk Rating |
-| -- | -- | -- | -- |
-| 4.7 (L1) Ensure that DKIM is enabled for all Exchange Online Domains (Automated) | Mandatory | No | High |`
-};
-
-$template.addEventListener('change', () => {
-  const key = $template.value;
-  if(!key) return;
-  $out.value = templates[key];
-});
-
-})();
-</script>
+      <!-- Replace each placeholder with a link when adding a new file.
+           Example: <a href="new-tool.html">Open New Tool</a> -->
+      <article class="card placeholder">
+        <h2>Future tool 1</h2>
+        <p>Add a description for your next tool here.</p>
+        <span>Coming soon</span>
+      </article>
+      <article class="card placeholder">
+        <h2>Future tool 2</h2>
+        <p>Add a description for another tool here.</p>
+        <span>Coming soon</span>
+      </article>
+    </section>
+    <p class="note">Adding a file? Edit a future tool card in <code>index.html</code> and replace “Coming soon” with a link to the new file.</p>
+  </main>
 </body>
 </html>

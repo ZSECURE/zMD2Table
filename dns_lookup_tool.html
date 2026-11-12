@@ -14,6 +14,7 @@
       --border: #d8dce5;
       --accent: #2563eb;
       --accent-hover: #1d4ed8;
+      --link: #1d4ed8;
       --danger: #b91c1c;
       --code-bg: #101827;
       --code-text: #e5e7eb;
@@ -26,6 +27,7 @@
         --text: #f8fafc;
         --muted: #a0a7b4;
         --border: #2a3344;
+        --link: #93c5fd;
         --code-bg: #020617;
         --code-text: #e5e7eb;
       }
@@ -46,6 +48,9 @@
       margin: 0 auto;
       padding: 32px 18px;
     }
+
+    nav { margin-bottom: 16px; }
+    nav a { color: var(--link); }
 
     .card {
       background: var(--panel);
@@ -159,6 +164,7 @@
 </head>
 <body>
   <main>
+    <nav><a href="index.html">← Home</a></nav>
     <section class="card">
       <h1>DNS Lookup Formatter</h1>
       <p>
